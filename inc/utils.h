@@ -15,6 +15,8 @@ void print_eth_address(char *s, unsigned char eth_addr[]);
 
 void print_ip_addr(char *s, unsigned int ip_addr) ;
 
+void print_iface(iface *iff);
+
 void print_arp_table_entry(arp_table_entry *ent) ;
 
 bool eth_address_eq(unsigned char *eth_a, unsigned char *eth_b);

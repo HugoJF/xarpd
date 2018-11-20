@@ -13,7 +13,6 @@
 
 struct iface {
     int sockfd;
-    int ttl;
     int mtu;
     char ifname[MAX_IFNAME_LEN];
     unsigned char mac_addr[HW_ADDR_LEN];
@@ -51,6 +50,9 @@ static unsigned short COMMAND_ADD = 3;
 static unsigned short COMMAND_DEL = 4;
 static unsigned short COMMAND_TTL = 5;
 static unsigned short COMMAND_DEL_NOT_FOUND = 6;
+static unsigned short COMMAND_IF_SHOW = 7;
+static unsigned short COMMAND_IF_CONFIG = 8;
+
 
 typedef struct _command_hdr {
     unsigned short type;
@@ -64,6 +66,12 @@ typedef struct _response_hdr {
     unsigned short len;
 } response_hdr;
 
+typedef struct _config_hdr {
+    unsigned int ip;
+    unsigned int mask;
+    unsigned short length;
+    char eth[MAX_IFNAME_LEN + 1];
+} config_hdr;
 
 typedef struct _arpTableEntry{
     unsigned int ipAddress;

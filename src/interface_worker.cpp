@@ -4,7 +4,6 @@
 
 #include "../inc/utils.h"
 #include "../inc/interface_worker.h"
-#include "../inc/solver.h"
 #include "../inc/arp_table.h"
 #include <net/if.h>         // ifreq
 #include <net/ethernet.h>   // ETH_P_ALL
@@ -22,7 +21,15 @@
 
 #define ETH_ADDR_LEN 6
 #define BUFFER_SIZE 1024
+#define DEFAULT_MTU 1500
 
+/**
+ * Interface reader thread
+ *
+ * @param ctx - interface worker context
+ *
+ * @return void
+ */
 void *reader(void *ctx) {
     auto *ir = (interface_worker *) ctx;
 
@@ -60,6 +67,12 @@ void *reader(void *ctx) {
     }
 }
 
+/**
+ * Process raw packet data
+ *
+ * @param data - raw data
+ * @param length - total data length
+ */
 void interface_worker::process_packet(const char *data, unsigned int length) {
     // Ethernet data
     auto *eth = (eth_hdr *) data;
@@ -108,6 +121,11 @@ void interface_worker::process_packet(const char *data, unsigned int length) {
     }
 }
 
+/**
+ * Dispatch interface worker thread
+ *
+ * @param ctx - reader context
+ */
 void dispatch_reader(interface_worker *ctx) {
     // Prepare thread data
     ctx->readerThread = new pthread_t();
@@ -120,12 +138,21 @@ void dispatch_reader(interface_worker *ctx) {
     }
 }
 
+/**
+ * Constructor
+ *
+ * @param iface_name - interface name
+ * @param main - arp table
+ */
 interface_worker::interface_worker(string *iface_name, arp_table *main) {
     this->iface_name = iface_name;
     this->iface_data = new iface;
     this->set_table(main);
 }
 
+/**
+ * Bind worker to interface
+ */
 void interface_worker::bind() {
     // Create socket
     this->rawsockfd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
@@ -147,6 +174,9 @@ void interface_worker::bind() {
     // Query interface information
     this->get_iface_info(rawsockfd, (char *) this->iface_name->c_str(), this->iface_data);
 
+    // Debug iface data
+    print_iface(this->iface_data);
+
     // Print current interface Ethernet address
     print_eth_address(iface_data->ifname, iface_data->mac_addr);
 
@@ -154,16 +184,35 @@ void interface_worker::bind() {
     dispatch_reader(this);
 }
 
+/**
+ * Bind interface by name
+ *
+ * @param fd - socket file descriptor
+ * @param iface_name - interface name
+ *
+ * @return - return value of setsockopt function
+ */
 int interface_worker::bind_iface_name(int fd, char *iface_name) {
     return setsockopt(fd, SOL_SOCKET, SO_BINDTODEVICE, iface_name, (socklen_t) strlen(iface_name));
 }
 
+/**
+ * Queries interface information
+ *
+ * @param sockfd - socket file descriptor for interface
+ * @param ifname - interface name
+ * @param ifn  - interface information object
+ */
 void interface_worker::get_iface_info(int sockfd, char *ifname, iface *ifn) {
-
+    /*
+     * Structure allocations
+     */
     struct ifreq s{};
     struct ifreq if_idx{};
     struct ifreq netmask{};
     struct ifreq ipaddr{};
+
+    ifn->mtu = DEFAULT_MTU;
 
     /*
      * Network Mask
@@ -198,7 +247,6 @@ void interface_worker::get_iface_info(int sockfd, char *ifname, iface *ifn) {
     strcpy(s.ifr_name, ifname);
     if (0 == ioctl(sockfd, SIOCGIFHWADDR, &s)) {
         memcpy(&ifn->mac_addr, &s.ifr_addr.sa_data, ETH_ADDR_LEN);
-        memcpy(&ifn->mtu, &s.ifr_ifru.ifru_mtu, sizeof(int));
         ifn->sockfd = sockfd;
         strcpy(ifn->ifname, ifname);
     } else {
@@ -218,10 +266,21 @@ void interface_worker::get_iface_info(int sockfd, char *ifname, iface *ifn) {
     ifn->index = if_idx.ifr_ifindex;
 }
 
+/**
+ * Set reference to ARP table
+ *
+ * @param table - table pointer
+ */
 void interface_worker::set_table(arp_table *table) {
     this->table = table;
 }
 
+/**
+ * Build reply ARP header
+ *
+ * @param arp - arp header to build
+ * @param entry - arp entry to respond
+ */
 void interface_worker::reply_arp(arp_hdr *arp, arp_table_entry *entry) {
     auto *p = new arp_hdr;
     auto *sa = new sockaddr_ll;
@@ -300,14 +359,25 @@ void interface_worker::reply_arp(arp_hdr *arp, arp_table_entry *entry) {
     printf("Sent!\n");
 }
 
+/**
+ * Resolve Ethernet address of given IP
+ *
+ * @param ip - ip to solve
+ */
 void interface_worker::resolve_ip(unsigned int ip) {
     print_ip_addr((char *) "Resolving: ", ip);
     printf("\n");
 
-    this->ask_request(ip);
+    // Send ARP request
+    this->arp_request(ip);
 }
 
-void interface_worker::ask_request(unsigned int ip) {
+/**
+ * Send ARP request to network
+ *
+ * @param ip - ip address to arp request
+ */
+void interface_worker::arp_request(unsigned int ip) {
     auto *p = new arp_hdr;
     auto *sa = new sockaddr_ll;
     char *pck = new char[14 + sizeof(arp_hdr)]; // 14 = Ethernet header size

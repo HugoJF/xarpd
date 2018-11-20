@@ -34,7 +34,7 @@ public:
     void process_packet(const char *data, unsigned int length);
 
     void reply_arp(arp_hdr *arp, arp_table_entry *pEntry);
-    void ask_request(unsigned int ip);
+    void arp_request(unsigned int ip);
 
     void resolve_ip(unsigned int i);
 

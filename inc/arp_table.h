@@ -33,7 +33,7 @@ public:
 
     bool remove(unsigned int ip);
 
-    void setTtl(unsigned int ip);
+    void setTtl(unsigned int ttl);
 
     unsigned long count();
 };

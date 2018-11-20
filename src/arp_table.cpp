@@ -7,12 +7,22 @@
 #include "../inc/arp_table.h"
 #include "../inc/utils.h"
 
+/**
+ * ARP table constructor
+ */
 arp_table::arp_table() {
     this->defaultTtl = 60;
     this->table = new vector<arp_table_entry *>();
     this->dispatch_timer_thread(this);
 };
 
+/**
+ * Timer thread
+ *
+ * @param ctx - timer context
+ *
+ * @return - void
+ */
 void *timer(void *ctx) {
     // Cast context variable
     auto *at = (arp_table *) ctx;
@@ -39,6 +49,11 @@ void *timer(void *ctx) {
     }
 }
 
+/**
+ * Dispatch timer thread with context
+ *
+ * @param ctx - arp_table object context
+ */
 void arp_table::dispatch_timer_thread(arp_table *ctx) {
     // Build thread information
     ctx->timer_thread = new pthread_t();
@@ -51,10 +66,24 @@ void arp_table::dispatch_timer_thread(arp_table *ctx) {
     }
 }
 
+/**
+ * Get ARP entry by index
+ *
+ * @param index - index
+ *
+ * @return - nullptr if not found, arp_table_entry* if found
+ */
 arp_table_entry *arp_table::get(unsigned int index) {
     return this->table->at(index);
 }
 
+/**
+ * Get ARP entry by IP
+ *
+ * @param ip - ip to find
+ *
+ * @return - nullptr if not found, arp_table_entry* if found
+ */
 arp_table_entry *arp_table::find_by_ip(unsigned int ip) {
     // Iterate over each entry in table
     for (int i = 0; i < this->count(); ++i) {
@@ -68,6 +97,13 @@ arp_table_entry *arp_table::find_by_ip(unsigned int ip) {
     return nullptr;
 }
 
+/**
+ * Get ARP entry by Ethernet address
+ *
+ * @param eth - ethernet address to find
+ *
+ * @return - nullptr if not found, arp_table_entry* if found
+ */
 arp_table_entry *arp_table::find_by_eth(unsigned char eth[]) {
     // Iterate over each entry in table
     for (int i = 0; i < this->table->size(); ++i) {
@@ -80,6 +116,13 @@ arp_table_entry *arp_table::find_by_eth(unsigned char eth[]) {
     return nullptr;
 }
 
+/**
+ * Build arp_table_entry and pushes to table
+ *
+ * @param ip_address - ip address
+ * @param eth_address - ethernet address
+ * @param ttl - ttl
+ */
 void arp_table::add(unsigned int ip_address, unsigned char eth_address[], unsigned int ttl) {
     // Debugging
     print_ip_addr((char *) "Adding ARP entry from: ", ip_address);
@@ -106,32 +149,57 @@ void arp_table::add(unsigned int ip_address, unsigned char eth_address[], unsign
     printf("\n");
 }
 
+/**
+ * Returns amount of entries in table
+ *
+ * @return - entry count
+ */
 unsigned long arp_table::count() {
     return this->table->size();
 }
 
+/**
+ * Add ARP entry with default TTL
+ *
+ * @param ip_address - ip address
+ * @param eth_address - ethernet address
+ */
 void arp_table::add(unsigned int ip_address, unsigned char *eth_address) {
     this->add(ip_address, eth_address, defaultTtl);
 }
 
+/**
+ * Remove entry by IP
+ *
+ * @param ip - ip address
+ *
+ * @return - if an entry got removed
+ */
 bool arp_table::remove(unsigned int ip) {
     arp_table_entry *x;
+    bool removed = false;
 
     // Iterate over each entry in table
     for (unsigned long i = 0; i < this->table->size(); ++i) {
         x = this->table->at(i);
 
-        // Return true since something was erased
+        // Mark 'removed' if something got removed
         if (x->ipAddress == ip) {
             this->table->erase(this->table->begin() + i);
-            return true;
+            // Vector element was removed and shifted others
+            i--;
+            removed =  true;
         }
     }
 
-    // Nothing was erased
-    return false;
+    return removed;
 }
 
-void arp_table::setTtl(unsigned int ip) {
-    this->defaultTtl = ip < 0 ? -1 : ip;
+/**
+ * Set default TTL
+ *
+ * @param ttl - new default ttl
+ */
+void arp_table::setTtl(unsigned int ttl) {
+    this->defaultTtl = ttl < 0 ? -1 : ttl;
 }

@@ -68,12 +68,24 @@ unsigned int parse_ip_addr(char *filter) {
     return result;
 }
 
+/**
+ * Prints Ethernet address
+ *
+ * @param s - prefix to print
+ * @param eth_addr - ethernet address
+ */
 void print_eth_address(char *s, unsigned char eth_addr[]) {
     printf("%s%02X:%02X:%02X:%02X:%02X:%02X", s,
            eth_addr[0], eth_addr[1], eth_addr[2],
            eth_addr[3], eth_addr[4], eth_addr[5]);
 }
 
+/**
+ * Prints IP address
+ *
+ * @param s - prefix to print
+ * @param ip_addr - ip address
+ */
 void print_ip_addr(char *s, unsigned int ip_addr) {
     printf("%s%u.%u.%u.%u", s,
            (unsigned char) (ip_addr >> 24),
@@ -82,13 +94,48 @@ void print_ip_addr(char *s, unsigned int ip_addr) {
            (unsigned char) (ip_addr >> 0));
 }
 
+/**
+ * Prints ARP table
+ *
+ * @param ent - entry to print
+ */
 void print_arp_table_entry(arp_table_entry *ent) {
     print_ip_addr((char *) "(", ent->ipAddress);
     printf(", ");
     print_eth_address((char *) "", ent->ethAddress);
     printf(", %d)\n", ent->ttl);
 }
+/**
+ * Prints IFace data
+ *
+ * @param iff - iface object
+ */
+void print_iface(iface *iff) {
+    printf("======== %s ========\n=>\n",iff->ifname);
+    printf("=>\tLink encap: Ethernet\n");
+    printf("=>\tMAC Address: ");
+    print_eth_address((char*) "", iff->mac_addr);
+    printf("\n");
+    print_ip_addr((char*) "=>\tInet end: ", iff->ip_addr);
+    printf("\n");
+    print_ip_addr((char*) "=>\tBcast: ", iff->ip_addr | ~iff->netmask);
+    printf("\n");
+    print_ip_addr((char*) "=>\tNetmask: ", iff->netmask);
+    printf("\n");
+    printf("=>\tUP MTU: %d\n", iff->mtu);
+    printf("=>\tRX packets: %d TX packets: %d\n", iff->rx_pkts, iff->tx_pkts);
+    printf("=>\tRX bytes: %d TX bytes: %d\n", iff->rx_bytes, iff->tx_bytes);
+    printf("=>\n======== %s ========\n\n",iff->ifname);
+}
 
+/**
+ * Compares 2 Ethernet address
+ *
+ * @param eth_a - address a
+ * @param eth_b - address b
+ *
+ * @return - true if equal, false if not
+ */
 bool eth_address_eq(unsigned char *eth_a, unsigned char *eth_b) {
     for (int i = 0; i < 6; ++i) {
         if (eth_a[i] != eth_b[i]) {
@@ -99,11 +146,18 @@ bool eth_address_eq(unsigned char *eth_a, unsigned char *eth_b) {
     return true;
 }
 
+/**
+ * Fixes variable length fields
+ *
+ * @param data - raw data
+ * @param hdr - header to fix
+ */
 void build_arp_header(const char *data, arp_hdr *hdr) {
     char hl = hdr->hardware_length;
     char pl = hdr->protocol_length;
     unsigned int off = 8 + sizeof(eth_hdr);
 
+    // Copies header data with correct header
     memcpy(hdr->sender_mac, data + off, hl);
     memcpy(&hdr->sender_ip, data + off + hl, pl);
     memcpy(hdr->destination_mac, data + off + hl + pl, hl);

@@ -23,13 +23,9 @@ void send_command(command_hdr *cmd);
 
 void send_if_show();
 
-void send_set_ttl(int ttl);
+void send_if_config(char ifn[MAX_IFNAME_LEN], unsigned int ip, unsigned int mask);
 
-void send_del(unsigned int ip);
-
-void send_add(unsigned int ip, unsigned char mac[], unsigned int ttl);
-
-void send_res(unsigned int ip);
+void send_if_mtu(char ifn[MAX_IFNAME_LEN], int mtu);
 
 /*
  * Utils
@@ -48,11 +44,9 @@ unsigned char *buffer;
 
 int main(int argc, char **args) {
     printf("Commands:\n"
-           "1. xarp show\n"
-           "2. xarp ttl\n"
-           "3. xarp del <ip>\n"
-           "4. xarp add <ip> <mac> <ttl>\n"
-           "5. xarp res <ip>\n");
+           "1. xifconfig\n"
+           "2. xifconfig <interface> <ip> <mask>\n"
+           "3. xifconfig <interface> <mtu>\n");
 
     /*
      * Prepare socket
@@ -68,28 +62,21 @@ int main(int argc, char **args) {
     /**
      * Call function according to arguments
      */
-    if (strcmp(args[1], "show") == 0) {
+    if (argc == 1) {
         send_if_show();
-    } else if (strcmp(args[1], "ttl") == 0) {
-        auto ttl = (unsigned int) strtol(args[2], nullptr, 10);
-
-        send_set_ttl(ttl);
-    } else if (strcmp(args[1], "del") == 0) {
-        unsigned int ip = parse_ip_addr(args[2]);
-
-        send_del(ip);
-    } else if (strcmp(args[1], "add") == 0) {
-        unsigned int ip = parse_ip_addr(args[2]);
-        unsigned char *eth = parse_eth_addr(args[3]);
-        auto ttl = (unsigned int) strtol(args[4], nullptr, 10);
-
-        send_add(ip, eth, ttl);
-    } else if (strcmp(args[1], "res") == 0) {
-        unsigned int ip = parse_ip_addr(args[2]);
-
-        send_res(ip);
-    } else {
-        printf("Unrecognized command: %s\n", args[1]);
+    } else if (argc == 4) {
+        printf("COMMAND NOT IMPLEMENTED\n");
+//        char *name = args[2];
+//        unsigned ip = parse_ip_addr(args[3]);
+//        unsigned mask = parse_ip_addr(args[4]);
+//
+//        send_if_config(name, ip, mask);
+    } else if (argc == 3) {
+        printf("COMMAND NOT IMPLEMENTED\n");
+//        char *name = args[2];
+//        int mtu = (int) strtol(args[3], nullptr, 10);
+//
+//        send_if_mtu(name, mtu);
     }
 }
 
@@ -101,7 +88,7 @@ void send_if_show() {
     auto cmd = get_fresh_cmd();
 
     // Set command to show
-    cmd->type = COMMAND_SHOW;
+    cmd->type = COMMAND_IF_SHOW;
 
     // Send command
     send_command(cmd);
@@ -110,15 +97,15 @@ void send_if_show() {
     // Receive response
     if ((received_bytes = (unsigned int) recv(listenFd, buffer, buffer_size, 0)) > 0) {
         auto *res = (response_hdr *) buffer;
-        unsigned int entry_count = res->len / sizeof(arp_table_entry);
+        unsigned int entry_count = res->len / sizeof(iface);
         printf("Response received: %d with %d bytes (raw: %d)\n", res->type, res->len, received_bytes);
-        printf("Received %d table entries\n", entry_count);
+        printf("Received %d interface entries\n", entry_count);
 
         // Print each ARP entry
         for (int i = 0; i < entry_count; ++i) {
-            auto *ent = (arp_table_entry *) (buffer + sizeof(response_hdr) + (sizeof(arp_table_entry) * i));
+            auto *ent = (iface *) (buffer + sizeof(response_hdr) + (sizeof(iface) * i));
 
-            print_arp_table_entry(ent);
+            print_iface(ent);
         }
 
     }
@@ -129,16 +116,26 @@ void send_if_show() {
  *
  * @param ttl - update ttl
  */
-void send_set_ttl(int ttl) {
-    // Get new command
+void send_if_config(char ifn[MAX_IFNAME_LEN], unsigned int ip, unsigned int mask) {
+    // Allocate memory
     auto cmd = get_fresh_cmd();
+    auto config = new config_hdr;
+    unsigned char data[sizeof(command_hdr) + sizeof(config_hdr)];
 
     // Set command to TTL
-    cmd->type = COMMAND_TTL;
-    cmd->ttl = (unsigned short) ttl;
+    cmd->type = COMMAND_IF_CONFIG;
 
-    // Send command
-    send_command(cmd);
+    // Set config
+    memcpy(&config->eth, ifn, strlen(ifn) + 1);
+    config->ip = ip;
+    config->mask = mask;
+    config->length = 0;
+
+    memcpy(data, cmd, sizeof(command_hdr));
+    memcpy(data + sizeof(command_hdr), config, sizeof(config_hdr));
+
+    // Send data
+    sendto(listenFd, data, sizeof(command_hdr) + sizeof(config_hdr), 0, (struct sockaddr *) &addr, sizeof(struct sockaddr_in));
     printf("Sent\n");
 
     // Receive response
@@ -160,13 +157,12 @@ void send_set_ttl(int ttl) {
  *
  * @param ip - ip to delete
  */
-void send_del(unsigned int ip) {
+void send_if_mtu(char ifn[MAX_IFNAME_LEN], int mtu) {
     // Get new command
     auto cmd = get_fresh_cmd();
 
     // Set command to delete
     cmd->type = COMMAND_DEL;
-    cmd->ip = ip;
 
     // Send command
     send_command(cmd);
@@ -184,69 +180,6 @@ void send_del(unsigned int ip) {
             printf("IP could not be found\n");
         } else {
             printf("ERROR deleting IP from ARP table\n");
-        }
-    }
-}
-
-/**
- * Send add command
- *
- * @param ip - ip of ARP entry
- * @param mac - mac of ARP entry
- * @param ttl - ttl of ARP entry
- */
-void send_add(unsigned int ip, unsigned char mac[], unsigned int ttl) {
-    // Get new command header
-    auto cmd = get_fresh_cmd();
-
-    // Set command to add
-    cmd->type = COMMAND_ADD;
-    cmd->ip = ip;
-    memcpy(cmd->eth, mac, sizeof(char) * 6);
-    cmd->ttl = ttl;
-
-    // Send to daemon
-    send_command(cmd);
-    printf("Sent\n");
-
-    // Wait for response
-    if ((received_bytes = (unsigned int) recv(listenFd, buffer, buffer_size, 0)) > 0) {
-        auto *res = (response_hdr *) buffer;
-        printf("Response received: %d with %d bytes (raw: %d)\n", res->type, res->len, received_bytes);
-
-        // Print feedback to user
-        if (res->type == COMMAND_ADD) {
-            printf("Table entry added successfully!\n");
-        }
-    }
-}
-
-/*
- * Send resolve command
- */
-void send_res(unsigned int ip) {
-    // Get new command header
-    auto cmd = get_fresh_cmd();
-
-    // Set to resolve
-    cmd->type = COMMAND_RES;
-    cmd->ip = ip;
-
-    // Send to daemon
-    send_command(cmd);
-    printf("Sent\n");
-
-    // Wait response
-    if ((received_bytes = (unsigned int) recv(listenFd, buffer, buffer_size, 0)) > 0) {
-        auto *res = (response_hdr *) buffer;
-        printf("Response received: %d with %d bytes (raw: %d)\n", res->type, res->len, received_bytes);
-
-        // If IP was resolved successfully, add new entry to ARP table
-        if (res->len == sizeof(arp_table_entry)) {
-            printf("Sucessfully resolved IP:\n");
-            print_arp_table_entry((arp_table_entry *) (buffer + sizeof(response_hdr)));
-        } else {
-            printf("Could not resolve IP\n");
         }
     }
 }
