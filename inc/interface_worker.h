@@ -17,8 +17,11 @@ using namespace std;
 
 class interface_worker {
 private:
-    arp_table *table;
     string *iface_name;
+    arp_table *table;
+    interface_worker** workers;
+    int worker_count;
+
     int rawsockfd;
 
     int bind_iface_name(int fd, char *iface_name);
@@ -27,7 +30,7 @@ public:
     iface *iface_data;
     pthread_t *readerThread;
 
-    interface_worker(string *iface_name, arp_table* main);
+    interface_worker(string *iface_name, arp_table *main, interface_worker **pWorker, int i);
 
     void set_table(arp_table *table);
     void bind();

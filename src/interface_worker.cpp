@@ -144,9 +144,11 @@ void dispatch_reader(interface_worker *ctx) {
  * @param iface_name - interface name
  * @param main - arp table
  */
-interface_worker::interface_worker(string *iface_name, arp_table *main) {
+interface_worker::interface_worker(string *iface_name, arp_table *main, interface_worker **workers, int worker_count) {
     this->iface_name = iface_name;
     this->iface_data = new iface;
+    this->workers = workers;
+    this->worker_count = worker_count;
     this->set_table(main);
 }
 
@@ -368,8 +370,13 @@ void interface_worker::resolve_ip(unsigned int ip) {
     print_ip_addr((char *) "Resolving: ", ip);
     printf("\n");
 
-    // Send ARP request
-    this->arp_request(ip);
+    // Find interface that handles the network for IP
+    auto w = find_interface_worker(ip, this->workers, this->worker_count);
+
+    // Send ARP request if Interface Worker was found
+    if(w != nullptr) {
+        w->arp_request(ip);
+    }
 }
 
 /**

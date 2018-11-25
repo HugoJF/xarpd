@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include "../inc/utils.h"
 #include "../inc/types.h"
+#include "../inc/interface_worker.h"
 
 /**
  * Parses Ethernet address to 6 bytes
@@ -162,4 +163,57 @@ void build_arp_header(const char *data, arp_hdr *hdr) {
     memcpy(&hdr->sender_ip, data + off + hl, pl);
     memcpy(hdr->destination_mac, data + off + hl + pl, hl);
     memcpy(&hdr->destination_ip, data + off + hl + pl + hl, pl);
+}
+
+/**
+ * Finds Interface Worker object that contains handles network for given IP
+ *
+ * @param ip - ip to match interface
+ *
+ * @return - interface worker pointer
+ */
+interface_worker *find_interface_worker(unsigned int ip, interface_worker **workers, int worker_count) {
+    // Loops for each worker
+    for (int i = 0; i < worker_count; ++i) {
+        // Grab reference
+        interface_worker *ifw = workers[i];
+
+        // Get need information
+        unsigned int mask = ifw->iface_data->netmask;
+        unsigned int net_if = mask & ifw->iface_data->ip_addr;
+        unsigned int net_ip = mask & ip;
+
+        // Debug
+        printf("Attempting to solve: ");
+        print_ip_addr((char*) "", net_if);
+        printf(" == ");
+        print_ip_addr((char*) "", net_ip);
+        printf("\n");
+
+        // Check if interface and ip are on the same network
+        if(net_if == net_ip) {
+            return ifw;
+        }
+    }
+
+    return nullptr;
+}
+
+
+/**
+ * Find interface by name
+ *
+ * @param eth - iface name
+ *
+ * @return - iface worker reference
+ */
+interface_worker *find_interface_worker_by_name(char eth[23], interface_worker **workers, int worker_count) {
+    // Loops for each worker
+    for (int i = 0; i < worker_count; ++i) {
+        if(strcmp(eth, workers[i]->iface_data->ifname) == 0) {
+            return workers[i];
+        }
+    }
+
+    return nullptr;
 }

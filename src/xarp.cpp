@@ -19,6 +19,8 @@ void connect();
  * Commands
  */
 
+void print_usage();
+
 void send_command(command_hdr *cmd);
 
 void send_if_show();
@@ -47,13 +49,6 @@ unsigned int received_bytes;
 unsigned char *buffer;
 
 int main(int argc, char **args) {
-    printf("Commands:\n"
-           "1. xarp show\n"
-           "2. xarp ttl\n"
-           "3. xarp del <ip>\n"
-           "4. xarp add <ip> <mac> <ttl>\n"
-           "5. xarp res <ip>\n");
-
     /*
      * Prepare socket
      */
@@ -68,29 +63,39 @@ int main(int argc, char **args) {
     /**
      * Call function according to arguments
      */
-    if (strcmp(args[1], "show") == 0) {
+    if (strcmp(args[1], "show") == 0 && argc == 2) {
         send_if_show();
-    } else if (strcmp(args[1], "ttl") == 0) {
+    } else if (strcmp(args[1], "ttl") == 0 && argc == 3) {
         auto ttl = (unsigned int) strtol(args[2], nullptr, 10);
 
         send_set_ttl(ttl);
-    } else if (strcmp(args[1], "del") == 0) {
+    } else if (strcmp(args[1], "del") == 0 && argc == 3) {
         unsigned int ip = parse_ip_addr(args[2]);
 
         send_del(ip);
-    } else if (strcmp(args[1], "add") == 0) {
+    } else if (strcmp(args[1], "add") == 0 && argc == 5) {
         unsigned int ip = parse_ip_addr(args[2]);
         unsigned char *eth = parse_eth_addr(args[3]);
         auto ttl = (unsigned int) strtol(args[4], nullptr, 10);
 
         send_add(ip, eth, ttl);
-    } else if (strcmp(args[1], "res") == 0) {
+    } else if (strcmp(args[1], "res") == 0 && argc == 2) {
         unsigned int ip = parse_ip_addr(args[2]);
 
         send_res(ip);
     } else {
         printf("Unrecognized command: %s\n", args[1]);
+        print_usage();
     }
+}
+
+void print_usage() {
+    printf("Commands:\n"
+           "1. xarp show\n"
+           "2. xarp ttl <ttl>\n"
+           "3. xarp del <ip>\n"
+           "4. xarp add <ip> <mac> <ttl>\n"
+           "5. xarp res <ip>\n");
 }
 
 /**
@@ -105,20 +110,24 @@ void send_if_show() {
 
     // Send command
     send_command(cmd);
-    printf("Sent\n");
+//    printf("Sent\n");
 
     // Receive response
     if ((received_bytes = (unsigned int) recv(listenFd, buffer, buffer_size, 0)) > 0) {
         auto *res = (response_hdr *) buffer;
         unsigned int entry_count = res->len / sizeof(arp_table_entry);
-        printf("Response received: %d with %d bytes (raw: %d)\n", res->type, res->len, received_bytes);
-        printf("Received %d table entries\n", entry_count);
+//        printf("Response received: %d with %d bytes (raw: %d)\n", res->type, res->len, received_bytes);
+//        printf("Received %d table entries\n", entry_count);
 
         // Print each ARP entry
         for (int i = 0; i < entry_count; ++i) {
             auto *ent = (arp_table_entry *) (buffer + sizeof(response_hdr) + (sizeof(arp_table_entry) * i));
 
             print_arp_table_entry(ent);
+        }
+
+        if(entry_count == 0) {
+            printf("ARP table is empty\n");
         }
 
     }
@@ -139,12 +148,12 @@ void send_set_ttl(int ttl) {
 
     // Send command
     send_command(cmd);
-    printf("Sent\n");
+//    printf("Sent\n");
 
     // Receive response
     if ((received_bytes = (unsigned int) recv(listenFd, buffer, buffer_size, 0)) > 0) {
         auto *res = (response_hdr *) buffer;
-        printf("Response received: %d with %d bytes (raw: %d)\n", res->type, res->len, received_bytes);
+//        printf("Response received: %d with %d bytes (raw: %d)\n", res->type, res->len, received_bytes);
 
         // Feedback user
         if (res->type == COMMAND_TTL) {
@@ -170,12 +179,12 @@ void send_del(unsigned int ip) {
 
     // Send command
     send_command(cmd);
-    printf("Sent\n");
+//    printf("Sent\n");
 
     // Receive response
     if ((received_bytes = (unsigned int) recv(listenFd, buffer, buffer_size, 0)) > 0) {
         auto *res = (response_hdr *) buffer;
-        printf("Response received: %d with %d bytes (raw: %d)\n", res->type, res->len, received_bytes);
+//        printf("Response received: %d with %d bytes (raw: %d)\n", res->type, res->len, received_bytes);
 
         // Feedback user
         if (res->type == COMMAND_DEL) {
@@ -207,12 +216,12 @@ void send_add(unsigned int ip, unsigned char mac[], unsigned int ttl) {
 
     // Send to daemon
     send_command(cmd);
-    printf("Sent\n");
+//    printf("Sent\n");
 
     // Wait for response
     if ((received_bytes = (unsigned int) recv(listenFd, buffer, buffer_size, 0)) > 0) {
         auto *res = (response_hdr *) buffer;
-        printf("Response received: %d with %d bytes (raw: %d)\n", res->type, res->len, received_bytes);
+//        printf("Response received: %d with %d bytes (raw: %d)\n", res->type, res->len, received_bytes);
 
         // Print feedback to user
         if (res->type == COMMAND_ADD) {
@@ -234,12 +243,12 @@ void send_res(unsigned int ip) {
 
     // Send to daemon
     send_command(cmd);
-    printf("Sent\n");
+//    printf("Sent\n");
 
     // Wait response
     if ((received_bytes = (unsigned int) recv(listenFd, buffer, buffer_size, 0)) > 0) {
         auto *res = (response_hdr *) buffer;
-        printf("Response received: %d with %d bytes (raw: %d)\n", res->type, res->len, received_bytes);
+//        printf("Response received: %d with %d bytes (raw: %d)\n", res->type, res->len, received_bytes);
 
         // If IP was resolved successfully, add new entry to ARP table
         if (res->len == sizeof(arp_table_entry)) {
@@ -279,7 +288,7 @@ command_hdr *get_fresh_cmd() {
  * Connect to daemon
  */
 void connect() {
-    printf("Connecting...\n");
+//    printf("Connecting...\n");
 
     // Connect socket
     if (connect(listenFd, (struct sockaddr *) &addr, sizeof(struct sockaddr_in)) < 0) {
@@ -287,7 +296,7 @@ void connect() {
         exit(errno);
     }
 
-    printf("Connected.\n");
+//    printf("Connected.\n");
 }
 
 /**
@@ -296,7 +305,7 @@ void connect() {
 void build_socket() {
     listenFd = socket(AF_INET, SOCK_STREAM, 0);
 
-    printf("Socket: %d\n", listenFd);
+//    printf("Socket: %d\n", listenFd);
 
     // Set address configurations
     addr.sin_family = AF_INET;

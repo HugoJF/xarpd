@@ -33,19 +33,13 @@ response_hdr *respond_del(command_hdr *cmd);
 response_hdr *respond_ttl(command_hdr *cmd);
 
 /*
- * Interface functions
+ * xifconfig functions
  */
-interface_worker *find_interface_worker(unsigned int ip);
-
+response_hdr *respond_if_show(command_hdr *pHdr);
+response_hdr *respond_if_config(command_hdr *pHdr);
 /*
  * Variables
  */
-
-response_hdr *respond_if_show(command_hdr *pHdr);
-
-response_hdr *respond_if_config(command_hdr *pHdr);
-
-interface_worker *find_interface_worker_by_name(char eth[23]);
 
 // Address structure to receive commands
 struct sockaddr_in *daemonAddress;
@@ -74,12 +68,12 @@ int main(int argc, char **args) {
 
     // Allocates workers for each interface in arguments
     worker_count = argc - 1;
-    workers = new interface_worker*[worker_count];
+    workers = new interface_worker *[worker_count];
 
     // Create and bind workers
     for (int i = 0; i < worker_count; ++i) {
         printf("Creating worker for %s\n", args[i+1]);
-        workers[i] = new interface_worker(new string(args[i + 1]), table);
+        workers[i] = new interface_worker(new string(args[i + 1]), table, workers, worker_count);
         workers[i]->bind();
     }
 
@@ -100,7 +94,12 @@ int main(int argc, char **args) {
 
         response_hdr* res = respond_request(cmd);
 
-        send(con, res, sizeof(response_hdr) + res->len, 0);
+        if(res != nullptr) {
+            send(con, res, sizeof(response_hdr) + res->len, 0);
+        } else {
+            fprintf(stderr, "Request response is 'nullptr', aborting...\n");
+            exit(1);
+        }
     }
 }
 
@@ -263,7 +262,7 @@ response_hdr *respond_if_config(command_hdr *pHdr) {
     auto *res = new response_hdr();
 
     // Find and update iface
-    interface_worker *w = find_interface_worker_by_name(cfg->eth);
+    interface_worker *w = find_interface_worker_by_name(cfg->eth, workers, worker_count);
     w->iface_data->ip_addr = cfg->ip;
     w->iface_data->netmask = cfg->mask;
 
@@ -360,7 +359,7 @@ response_hdr *respond_res(command_hdr *cmd) {
     arp_table_entry *ent = nullptr;
 
     // Find worker that should handle requested IP
-    interface_worker *ifw = find_interface_worker(cmd->ip);
+    interface_worker *ifw = find_interface_worker(cmd->ip, workers, worker_count);
 
     // Check if worker exists
     if(ifw != nullptr) {
@@ -403,57 +402,6 @@ response_hdr *respond_res(command_hdr *cmd) {
     return res;
 }
 
-/**
- * Finds Interface Worker object that contains handles network for given IP
- *
- * @param ip - ip to match interface
- *
- * @return - interface worker pointer
- */
-interface_worker *find_interface_worker(unsigned int ip) {
-    // Loops for each worker
-    for (int i = 0; i < worker_count; ++i) {
-        // Grab reference
-        interface_worker *ifw = workers[i];
-
-        // Get need information
-        unsigned int mask = ifw->iface_data->netmask;
-        unsigned int net_if = mask & ifw->iface_data->ip_addr;
-        unsigned int net_ip = mask & ip;
-
-        // Debug
-        printf("Attempting to solve: ");
-        print_ip_addr((char*) "", net_if);
-        printf(" == ");
-        print_ip_addr((char*) "", net_ip);
-        printf("\n");
-
-        // Check if interface and ip are on the same network
-        if(net_if == net_ip) {
-            return ifw;
-        }
-    }
-
-    return nullptr;
-}
-
-/**
- * Find interface by name
- *
- * @param eth - iface name
- *
- * @return - iface worker reference
- */
-interface_worker *find_interface_worker_by_name(char eth[23]) {
-    // Loops for each worker
-    for (int i = 0; i < worker_count; ++i) {
-        if(strcmp(eth, workers[i]->iface_data->ifname) == 0) {
-            return workers[i];
-        }
-    }
-
-    return nullptr;
-}
 
 /**
  * Adds new IP to ARP table
