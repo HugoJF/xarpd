@@ -62,6 +62,10 @@ void *reader(void *ctx) {
             }
         }
 
+        // Count statistics
+        ir->iface_data->rx_bytes += data->size();
+        ir->iface_data->rx_pkts++;
+
         // Process received packet
         ir->process_packet(data->c_str(), data_size);
     }
@@ -376,6 +380,10 @@ void interface_worker::resolve_ip(unsigned int ip) {
     // Send ARP request if Interface Worker was found
     if(w != nullptr) {
         w->arp_request(ip);
+    } else {
+        printf("Could not find interface worker for IP: ");
+        print_ip_addr((char*)"", ip);
+        printf("\n");
     }
 }
 
@@ -460,6 +468,10 @@ void interface_worker::arp_request(unsigned int ip) {
 
     memcpy(pt, &p->destination_ip, sizeof(int));
     pt += sizeof(int);
+
+    // Count statistics
+    this->iface_data->tx_bytes += sizeof(arp_hdr);
+    this->iface_data->tx_pkts++;
 
     /*
      * Send raw frame

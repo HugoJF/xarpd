@@ -79,7 +79,7 @@ int main(int argc, char **args) {
         auto ttl = (unsigned int) strtol(args[4], nullptr, 10);
 
         send_add(ip, eth, ttl);
-    } else if (strcmp(args[1], "res") == 0 && argc == 2) {
+    } else if (strcmp(args[1], "res") == 0 && argc == 3./xarp) {
         unsigned int ip = parse_ip_addr(args[2]);
 
         send_res(ip);

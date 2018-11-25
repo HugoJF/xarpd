@@ -66,17 +66,17 @@ int main(int argc, char **args) {
         send_if_show();
     } else if (argc == 4) {
         printf("COMMAND NOT IMPLEMENTED\n");
-//        char *name = args[2];
-//        unsigned ip = parse_ip_addr(args[3]);
-//        unsigned mask = parse_ip_addr(args[4]);
-//
-//        send_if_config(name, ip, mask);
+        char *name = args[2];
+        unsigned ip = parse_ip_addr(args[2]);
+        unsigned mask = parse_ip_addr(args[3]);
+
+        send_if_config(name, ip, mask);
     } else if (argc == 3) {
         printf("COMMAND NOT IMPLEMENTED\n");
-//        char *name = args[2];
-//        int mtu = (int) strtol(args[3], nullptr, 10);
-//
-//        send_if_mtu(name, mtu);
+        char *name = args[1];
+        int mtu = (int) strtol(args[2], nullptr, 10);
+
+        send_if_mtu(name, mtu);
     }
 }
 
