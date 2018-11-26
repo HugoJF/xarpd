@@ -46,7 +46,7 @@ int main(int argc, char **args) {
     printf("Commands:\n"
            "1. xifconfig\n"
            "2. xifconfig <interface> <ip> <mask>\n"
-           "3. xifconfig <interface> <mtu>\n");
+           "3. xifconfig <interface> <mtu>\n\n\n");
 
     /*
      * Prepare socket
@@ -65,14 +65,12 @@ int main(int argc, char **args) {
     if (argc == 1) {
         send_if_show();
     } else if (argc == 4) {
-        printf("COMMAND NOT IMPLEMENTED\n");
-        char *name = args[2];
+        char *name = args[1];
         unsigned ip = parse_ip_addr(args[2]);
         unsigned mask = parse_ip_addr(args[3]);
 
         send_if_config(name, ip, mask);
     } else if (argc == 3) {
-        printf("COMMAND NOT IMPLEMENTED\n");
         char *name = args[1];
         int mtu = (int) strtol(args[2], nullptr, 10);
 
@@ -92,14 +90,13 @@ void send_if_show() {
 
     // Send command
     send_command(cmd);
-    printf("Sent\n");
 
     // Receive response
     if ((received_bytes = (unsigned int) recv(listenFd, buffer, buffer_size, 0)) > 0) {
         auto *res = (response_hdr *) buffer;
         unsigned int entry_count = res->len / sizeof(iface);
-        printf("Response received: %d with %d bytes (raw: %d)\n", res->type, res->len, received_bytes);
-        printf("Received %d interface entries\n", entry_count);
+//        printf("Response received: %d with %d bytes (raw: %d)\n", res->type, res->len, received_bytes);
+//        printf("Received %d interface entries\n", entry_count);
 
         // Print each ARP entry
         for (int i = 0; i < entry_count; ++i) {
@@ -122,32 +119,31 @@ void send_if_config(char ifn[MAX_IFNAME_LEN], unsigned int ip, unsigned int mask
     auto config = new config_hdr;
     unsigned char data[sizeof(command_hdr) + sizeof(config_hdr)];
 
-    // Set command to TTL
-    cmd->type = COMMAND_IF_CONFIG;
-
     // Set config
     memcpy(&config->eth, ifn, strlen(ifn) + 1);
     config->ip = ip;
     config->mask = mask;
     config->length = 0;
 
+    // Set command to TTL
+    cmd->type = COMMAND_IF_CONFIG;
+
     memcpy(data, cmd, sizeof(command_hdr));
     memcpy(data + sizeof(command_hdr), config, sizeof(config_hdr));
 
     // Send data
     sendto(listenFd, data, sizeof(command_hdr) + sizeof(config_hdr), 0, (struct sockaddr *) &addr, sizeof(struct sockaddr_in));
-    printf("Sent\n");
 
     // Receive response
     if ((received_bytes = (unsigned int) recv(listenFd, buffer, buffer_size, 0)) > 0) {
         auto *res = (response_hdr *) buffer;
-        printf("Response received: %d with %d bytes (raw: %d)\n", res->type, res->len, received_bytes);
+//        printf("Response received: %d with %d bytes (raw: %d)\n", res->type, res->len, received_bytes);
 
         // Feedback user
-        if (res->type == COMMAND_TTL) {
-            printf("TTL set successfully!\n");
+        if (res->type == COMMAND_IF_CONFIG) {
+            printf("Interface configured successfully!\n");
         } else {
-            printf("ERROR setting new TTL\n");
+            printf("ERROR setting updating interface\n");
         }
     }
 }
@@ -158,28 +154,36 @@ void send_if_config(char ifn[MAX_IFNAME_LEN], unsigned int ip, unsigned int mask
  * @param ip - ip to delete
  */
 void send_if_mtu(char ifn[MAX_IFNAME_LEN], int mtu) {
-    // Get new command
+    // Allocate memory
     auto cmd = get_fresh_cmd();
+    auto config = new config_hdr;
+    unsigned char data[sizeof(command_hdr) + sizeof(config_hdr)];
 
-    // Set command to delete
-    cmd->type = COMMAND_DEL;
+    // Set config
+    memcpy(&config->eth, ifn, strlen(ifn) + 1);
+    config->ip = (unsigned int) mtu;
+    config->mask = 0;
+    config->length = 0;
 
-    // Send command
-    send_command(cmd);
-    printf("Sent\n");
+    // Set command to TTL
+    cmd->type = COMMAND_IF_MTU;
+
+    memcpy(data, cmd, sizeof(command_hdr));
+    memcpy(data + sizeof(command_hdr), config, sizeof(config_hdr));
+
+    // Send data
+    sendto(listenFd, data, sizeof(command_hdr) + sizeof(config_hdr), 0, (struct sockaddr *) &addr, sizeof(struct sockaddr_in));
 
     // Receive response
     if ((received_bytes = (unsigned int) recv(listenFd, buffer, buffer_size, 0)) > 0) {
         auto *res = (response_hdr *) buffer;
-        printf("Response received: %d with %d bytes (raw: %d)\n", res->type, res->len, received_bytes);
+//        printf("Response received: %d with %d bytes (raw: %d)\n", res->type, res->len, received_bytes);
 
         // Feedback user
-        if (res->type == COMMAND_DEL) {
-            printf("IP deleted successfully!\n");
-        } else if (res->type == COMMAND_DEL_NOT_FOUND) {
-            printf("IP could not be found\n");
+        if (res->type == COMMAND_IF_MTU) {
+            printf("MTU updated successfully!\n");
         } else {
-            printf("ERROR deleting IP from ARP table\n");
+            printf("ERROR setting new MTU\n");
         }
     }
 }
@@ -212,15 +216,11 @@ command_hdr *get_fresh_cmd() {
  * Connect to daemon
  */
 void connect() {
-    printf("Connecting...\n");
-
     // Connect socket
     if (connect(listenFd, (struct sockaddr *) &addr, sizeof(struct sockaddr_in)) < 0) {
         perror("ERROR connecting to socket");
         exit(errno);
     }
-
-    printf("Connected.\n");
 }
 
 /**
@@ -228,8 +228,6 @@ void connect() {
  */
 void build_socket() {
     listenFd = socket(AF_INET, SOCK_STREAM, 0);
-
-    printf("Socket: %d\n", listenFd);
 
     // Set address configurations
     addr.sin_family = AF_INET;

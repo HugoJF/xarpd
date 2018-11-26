@@ -37,6 +37,7 @@ response_hdr *respond_ttl(command_hdr *cmd);
  */
 response_hdr *respond_if_show(command_hdr *pHdr);
 response_hdr *respond_if_config(command_hdr *pHdr);
+response_hdr *respond_if_mtu(command_hdr *pHdr);
 /*
  * Variables
  */
@@ -177,15 +178,19 @@ int accept_con() {
  */
 command_hdr *read_request(int conFd) {
 
-    auto bufferSize = (unsigned long) 1024;
+    // TODO: rewrite
+    auto request_data_size = 64 * 1024;
+    auto bufferSize = 1024;
+
+    char* request_data = new char[request_data_size];
     char buffer[bufferSize + 1];
+
     auto request_total_size = 0;
     auto request_partial_size = bufferSize;
-    auto request_data = new std::string();
     memset(buffer, '\0', bufferSize);
 
     // Keeps reading while read returns data
-    while (request_partial_size == bufferSize && request_total_size < bufferSize) {
+    while (request_partial_size == bufferSize && request_total_size < request_data_size) {
         // Reads partial request
         printf("Reading request... ");
         request_partial_size = (unsigned long) read(conFd, buffer, bufferSize);
@@ -200,23 +205,14 @@ command_hdr *read_request(int conFd) {
             exit(1);
         } else {
             printf("Read %d bytes\n", (int) request_partial_size);
+            memcpy(request_data + request_total_size, buffer, request_partial_size);
             request_total_size += request_partial_size;
-            request_data->append(buffer, request_partial_size);
         }
     }
 
     printf("Request total size: %d bytes.\n", (int) request_total_size);
 
-    // Cast data to command header
-    // TODO: use string
-    auto *cmd = new command_hdr;
-    memcpy(cmd, &buffer, sizeof(command_hdr));
-
-    // TODO: remove
-    printf("Type: %d\nIP: %d\nETH: %d:%d:%d:%d:%d:%d\nTTL: %d\n", cmd->type, cmd->ip, cmd->eth[0], cmd->eth[1],
-           cmd->eth[2], cmd->eth[3], cmd->eth[4], cmd->eth[5], cmd->ttl);
-
-    return cmd;
+    return (command_hdr*) request_data;
 }
 
 /**
@@ -243,7 +239,10 @@ response_hdr *respond_request(command_hdr *cmd) {
         return respond_if_show(cmd);
     } else if (cmd->type == COMMAND_IF_CONFIG) {
         return respond_if_config(cmd);
+    } else if (cmd->type == COMMAND_IF_MTU) {
+        return respond_if_mtu(cmd);
     } else {
+        printf("Could not respond request of type %d\n", cmd->type);
         return nullptr;
     }
 }
@@ -258,16 +257,21 @@ response_hdr *respond_request(command_hdr *cmd) {
 response_hdr *respond_if_config(command_hdr *pHdr) {
     printf("=== RESPONDING CONFIG INTERFACES COMMAND ===\n");
 
-    auto *cfg = (config_hdr*) (pHdr + sizeof(command_hdr));
+    size_t cmd_size = sizeof(command_hdr);
+    auto *cfg = (config_hdr*) (pHdr + 1);
     auto *res = new response_hdr();
 
     // Find and update iface
     interface_worker *w = find_interface_worker_by_name(cfg->eth, workers, worker_count);
-    w->iface_data->ip_addr = cfg->ip;
-    w->iface_data->netmask = cfg->mask;
+    if(w != nullptr) {
+        w->iface_data->ip_addr = cfg->ip;
+        w->iface_data->netmask = cfg->mask;
+        res->type = COMMAND_IF_CONFIG;
+    } else {
+        res->type = 0;
+    }
 
     // Fill header
-    res->type = COMMAND_IF_CONFIG;
     res->len = 0;
 
     return res;
@@ -304,6 +308,35 @@ response_hdr *respond_if_show(command_hdr *pHdr) {
 
     // Copy header data
     memcpy(data + sizeof(response_hdr), entries, entries_size);
+
+    return res;
+}
+
+/**
+ * Updates MTU and responds request
+ *
+ * @param cmd - command header
+ *
+ * @return - response header with iface entries appended
+ */
+response_hdr *respond_if_mtu(command_hdr *pHdr) {
+    printf("=== RESPONDING UPDATE MTU COMMAND ===\n");
+
+    size_t cmd_size = sizeof(command_hdr);
+    auto *cfg = (config_hdr*) (pHdr + 1);
+    auto *res = new response_hdr();
+
+    // Find and update iface
+    interface_worker *w = find_interface_worker_by_name(cfg->eth, workers, worker_count);
+    if(w != nullptr) {
+        w->iface_data->mtu = (int) cfg->ip;
+        res->type = COMMAND_IF_MTU;
+    } else {
+        res->type = 0;
+    }
+
+    // Fill header
+    res->len = 0;
 
     return res;
 }

@@ -1,7 +1,6 @@
 //
 // Created by root on 21/10/18.
 //
-
 #ifndef XARPD_TYPES_H
 #define XARPD_TYPES_H
 
@@ -26,12 +25,11 @@ struct iface {
 };
 
 typedef struct _ether_hdr {
-    unsigned char ether_dhost[HW_ADDR_LEN];   // Destination address
-    unsigned char ether_shost[HW_ADDR_LEN];   // Source address
-    unsigned short ether_type;      // Type of the payload
+    unsigned char ether_dhost[HW_ADDR_LEN];     // Destination address
+    unsigned char ether_shost[HW_ADDR_LEN];     // Source address
+    unsigned short ether_type;                  // Type of the payload
 } eth_hdr;
 
-// TODO: needs fix to make it support variable length fields
 typedef struct _arp_hdr {
     unsigned short hardware_type;
     unsigned short protocol_type;
@@ -52,7 +50,7 @@ static unsigned short COMMAND_TTL = 5;
 static unsigned short COMMAND_DEL_NOT_FOUND = 6;
 static unsigned short COMMAND_IF_SHOW = 7;
 static unsigned short COMMAND_IF_CONFIG = 8;
-
+static unsigned short COMMAND_IF_MTU = 9;
 
 typedef struct _command_hdr {
     unsigned short type;
